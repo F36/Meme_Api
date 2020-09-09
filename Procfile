@@ -1,1 +1,1 @@
-worker: ./bin/Meme_Api
+web: ./bin/Meme_Api
