@@ -6,21 +6,23 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/getsentry/sentry-go"
 )
 
 // EncodeCredentials : Return base64 Encoded client ID and Secret required for authentication
-func (r *Reddit) EncodeCredentials() (encodedCredentials string) {
-	data := r.ClientID + ":" + r.ClientSecret
+func EncodeCredentials() (encodedCredentials string) {
+	data := ClientID + ":" + ClientSecret
 	encodedCredentials = base64.StdEncoding.EncodeToString([]byte(data))
 	return
 }
 
 // MakeGetRequest : Makes a GET Request to Reddit API with Access Token
-func (r *Reddit) MakeGetRequest(url string) (responseBody []byte, errorCode int) {
+func MakeGetRequest(url string) (responseBody []byte, errorCode int) {
 	req, _ := http.NewRequest("GET", url, nil)
 
-	req.Header.Add("Authorization", "Bearer "+r.AccessToken)
-	req.Header.Add("User-Agent", r.UserAgent)
+	req.Header.Add("Authorization", "Bearer "+AccessToken)
+	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Add("Accept", "*/*")
 	req.Header.Add("Cache-Control", "no-cache")
 	req.Header.Add("Host", "oauth.reddit.com")
@@ -30,6 +32,7 @@ func (r *Reddit) MakeGetRequest(url string) (responseBody []byte, errorCode int)
 	res, err := http.DefaultClient.Do(req)
 
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Println("Error while making request", err)
 		return nil, res.StatusCode
 	}
@@ -37,7 +40,13 @@ func (r *Reddit) MakeGetRequest(url string) (responseBody []byte, errorCode int)
 	defer res.Body.Close()
 
 	// Read the response
-	body, _ := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
+
+	if err != nil {
+		sentry.CaptureException(err)
+		log.Println("Error while Parsing Response Body")
+		return nil, res.StatusCode
+	}
 
 	return body, res.StatusCode
 }

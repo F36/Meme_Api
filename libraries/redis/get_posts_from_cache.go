@@ -3,13 +3,13 @@ package redis
 import (
 	"encoding/json"
 
-	"github.com/R3l3ntl3ss/Meme_Api/models"
+	"Meme_Api/models"
 )
 
 // GetPostsFromCache : Get memes from Cache based on sub
-func (r Redis) GetPostsFromCache(sub string) []models.Meme {
+func GetPostsFromCache(sub string) []models.Meme {
 
-	memesBinary, err := r.Client.Get(sub).Bytes()
+	memesBinary, err := Client.Get(sub).Bytes()
 
 	if err != nil {
 		return nil

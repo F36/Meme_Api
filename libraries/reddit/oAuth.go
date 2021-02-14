@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"strings"
 
-	models "github.com/R3l3ntl3ss/Meme_Api/models/reddit"
+	rm "Meme_Api/libraries/reddit/models"
+
+	"github.com/getsentry/sentry-go"
 )
 
 // GetAccessToken : Get temporary Access Token based on App client ID and Secret
-func (r *Reddit) GetAccessToken() (accessToken string) {
+func GetAccessToken() (accessToken string) {
 
-	encodedCredentials := r.EncodeCredentials()
+	encodedCredentials := EncodeCredentials()
 
 	// Reddit URL to get access token
 	url := "https://www.reddit.com/api/v1/access_token"
@@ -21,10 +23,16 @@ func (r *Reddit) GetAccessToken() (accessToken string) {
 	// Set grant type to client_credentials as POST body
 	payload := strings.NewReader("grant_type=client_credentials")
 
-	req, _ := http.NewRequest("POST", url, payload)
+	req, err := http.NewRequest("POST", url, payload)
+
+	if err != nil {
+		sentry.CaptureException(err)
+		log.Println("Error while Creating Request")
+		return ""
+	}
 
 	// Set Headers including the User Agent and the Authorization with the encoded credentials
-	req.Header.Add("User-Agent", r.UserAgent)
+	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Add("Authorization", "Basic "+encodedCredentials)
 	req.Header.Add("Accept", "*/*")
 	req.Header.Add("Cache-Control", "no-cache")
@@ -39,6 +47,7 @@ func (r *Reddit) GetAccessToken() (accessToken string) {
 	res, err := http.DefaultClient.Do(req)
 
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Println("Error while making connecting to : " + url)
 		return ""
 	}
@@ -49,9 +58,10 @@ func (r *Reddit) GetAccessToken() (accessToken string) {
 	// Read the response
 	body, _ := ioutil.ReadAll(res.Body)
 
-	var accessTokenBody models.AccessTokenBody
+	var accessTokenBody rm.AccessTokenBody
 
 	if err := json.Unmarshal(body, &accessTokenBody); err != nil {
+		sentry.CaptureException(err)
 		log.Println("Error while Unmarshalling AccessTokenBody", err)
 		return ""
 	}

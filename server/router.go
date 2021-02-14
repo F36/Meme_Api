@@ -1,9 +1,8 @@
 package server
 
 import (
-	"github.com/R3l3ntl3ss/Meme_Api/controllers/gimme"
-	"github.com/R3l3ntl3ss/Meme_Api/libraries/reddit"
-	"github.com/R3l3ntl3ss/Meme_Api/libraries/redis"
+	"Meme_Api/api/gimme"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -12,31 +11,14 @@ import (
 func NewRouter() *gin.Engine {
 	router := gin.New()
 
+	// Gin and CORS Middlewares
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(cors.Default())
 
-	// Create a Reddit Object and Initialize it
-	r := &reddit.Reddit{}
-	r.Init()
-
-	// Create a Redis Object and Initialize it
-	cache := &redis.Redis{}
-	cache.Init()
-
+	// /gimme routes
 	gimmeRouter := router.Group("gimme")
-	{
-		g := gimme.Controller{
-			R:     r,
-			Cache: cache,
-		}
-
-		gimmeRouter.GET("", g.GetOneRandomMeme)
-
-		gimmeRouter.GET("/:interface", g.SubredditOrCount)
-
-		gimmeRouter.GET("/:interface/:count", g.GetNPostsFromSub)
-	}
+	gimme.Routes(gimmeRouter)
 
 	return router
 }

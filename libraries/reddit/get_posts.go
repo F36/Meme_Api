@@ -5,32 +5,42 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/R3l3ntl3ss/Meme_Api/models/response"
+	rm "Meme_Api/libraries/reddit/models"
+	"Meme_Api/models"
 
-	"github.com/R3l3ntl3ss/Meme_Api/models"
-
-	"github.com/R3l3ntl3ss/Meme_Api/models/reddit"
+	"github.com/getsentry/sentry-go"
 )
 
 // GetNPosts : Get (N) no. of posts from Reddit with Subreddit Name and Limit
-func (r *Reddit) GetNPosts(subreddit string, count int) ([]models.Meme, response.Error) {
+func GetNPosts(subreddit string, count int) ([]models.Meme, rm.CustomRedditError) {
 
 	url := GetSubredditAPIURL(subreddit, count)
 
-	body, statusCode := r.MakeGetRequest(url)
+	body, statusCode := MakeGetRequest(url)
 
 	// Check if the access Token has been expired
 	if statusCode == 401 {
 		// Get new access token
-		r.GetNewAccessToken()
+		GetNewAccessToken()
 
 		// Make request Again
-		body, _ = r.MakeGetRequest(url)
+		body, statusCode = MakeGetRequest(url)
+	}
+
+	// If Reddit is down return 503 error
+	if statusCode == 500 {
+		res := rm.CustomRedditError{
+			Code:    http.StatusServiceUnavailable,
+			Message: "Reddit is unreachable at the moment",
+		}
+
+		sentry.CaptureMessage("Reddit is Down!!")
+		return nil, res
 	}
 
 	// Handle Subreddit Errors for Forbidden and Not Found
 	if statusCode == 403 {
-		res := response.Error{
+		res := rm.CustomRedditError{
 			Code:    http.StatusForbidden,
 			Message: "Unable to Access Subreddit. Subreddit is Locked or Private",
 		}
@@ -39,7 +49,7 @@ func (r *Reddit) GetNPosts(subreddit string, count int) ([]models.Meme, response
 	}
 
 	if statusCode == 404 {
-		res := response.Error{
+		res := rm.CustomRedditError{
 			Code:    http.StatusNotFound,
 			Message: "This subreddit does not exist.",
 		}
@@ -47,12 +57,23 @@ func (r *Reddit) GetNPosts(subreddit string, count int) ([]models.Meme, response
 		return nil, res
 	}
 
-	var redditResponse reddit.Response
+	if statusCode != 200 {
+		res := rm.CustomRedditError{
+			Code:    http.StatusServiceUnavailable,
+			Message: "Unknown error while getting posts. Please try again",
+		}
+
+		sentry.CaptureMessage(string(body))
+		return nil, res
+	}
+
+	var redditResponse rm.Response
 
 	if err := json.Unmarshal(body, &redditResponse); err != nil {
+		sentry.CaptureException(err)
 		log.Println("Error while Parsing Reddit Response")
 
-		res := response.Error{
+		res := rm.CustomRedditError{
 			Code:    http.StatusInternalServerError,
 			Message: "Error while getting memes from subreddit. Please try again",
 		}
@@ -62,7 +83,7 @@ func (r *Reddit) GetNPosts(subreddit string, count int) ([]models.Meme, response
 
 	// Check if there are posts in the subreddit
 	if len(redditResponse.Data.Children) == 0 {
-		res := response.Error{
+		res := rm.CustomRedditError{
 			Code:    http.StatusNotFound,
 			Message: "This subreddit has no posts or doesn't exist.",
 		}
@@ -82,10 +103,11 @@ func (r *Reddit) GetNPosts(subreddit string, count int) ([]models.Meme, response
 			Ups:       post.Data.Ups,
 			NSFW:      post.Data.Over18,
 			Spoiler:   post.Data.Spoiler,
+			Preview:   post.Data.GetCleanPreviewImages(),
 		}
 
 		memes = append(memes, meme)
 	}
 
-	return memes, response.Error{}
+	return memes, rm.CustomRedditError{}
 }
